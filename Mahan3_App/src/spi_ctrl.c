@@ -1,64 +1,14 @@
-/******************************************************************************/
-/***************************** Include Files **********************************/
-/******************************************************************************/
+/**
+ * @file spi_ctrl.c
+ * @brief Board CDCM6208 programming and AD9361 AUXDAC1 voltage control.
+ */
 #include "spi_ctrl.h"
 
 #include "util.h"
 #include "platform.h"
 #include "parameters.h"
-//uint32_t cdcm6208_init_data[] = {//40MHz reference clock
-//		((uint32_t) 3  << 16) | 0x10B0,
-//		((uint32_t) 0  << 16) | 0x01B1, //B9
-//		((uint32_t) 1  << 16) | 0x0000,
-//		((uint32_t) 2  << 16) | 0x003B,
-//		((uint32_t) 3  << 16) | 0x10B0,
-//		((uint32_t) 4  << 16) | 0x306C,
-//		((uint32_t) 5  << 16) | 0x01B8,
-//		((uint32_t) 6  << 16) | 0x000E,
-//		((uint32_t) 7  << 16) | 0x0000,
-//		((uint32_t) 8  << 16) | 0x0014,
-//		((uint32_t) 9  << 16) | 0x2000,
-//		((uint32_t) 10 << 16) | 0x0000,
-//		((uint32_t) 11 << 16) | 0x0000,
-//		((uint32_t) 12 << 16) | 0x2052,
-//		((uint32_t) 13 << 16) | 0x0000,
-//		((uint32_t) 14 << 16) | 0x0000,
-//		((uint32_t) 15 << 16) | 0x0000,
-//		((uint32_t) 16 << 16) | 0x0000,
-//		((uint32_t) 17 << 16) | 0x0000,
-//		((uint32_t) 18 << 16) | 0x0000,
-//		((uint32_t) 19 << 16) | 0x0000,
-//		((uint32_t) 20 << 16) | 0x0000,
-//		((uint32_t) 21 << 16) | 0x0000,
-//		((uint32_t) 3  << 16) | 0x10F0,
-//	};
-//uint32_t cdcm6208_init_data[] = {//26MHz reference clock
-//		((uint32_t) 3  << 16) | 0x10B0,
-//		((uint32_t) 0  << 16) | 0x01B9,
-//		((uint32_t) 1  << 16) | 0x0010,
-//		((uint32_t) 2  << 16) | 0x019B,
-//		((uint32_t) 3  << 16) | 0x10B0,
-//		((uint32_t) 4  << 16) | 0x306C,
-//		((uint32_t) 5  << 16) | 0x01B8,
-//		((uint32_t) 6  << 16) | 0x0017,
-//		((uint32_t) 7  << 16) | 0x0000,
-//		((uint32_t) 8  << 16) | 0x0017,
-//		((uint32_t) 9  << 16) | 0x2000,
-//		((uint32_t) 10 << 16) | 0x0000,
-//		((uint32_t) 11 << 16) | 0x0000,
-//		((uint32_t) 12 << 16) | 0x2052,
-//		((uint32_t) 13 << 16) | 0x0000,
-//		((uint32_t) 14 << 16) | 0x0000,
-//		((uint32_t) 15 << 16) | 0x0000,
-//		((uint32_t) 16 << 16) | 0x0000,
-//		((uint32_t) 17 << 16) | 0x0000,
-//		((uint32_t) 18 << 16) | 0x0000,
-//		((uint32_t) 19 << 16) | 0x0000,
-//		((uint32_t) 20 << 16) | 0x0000,
-//		((uint32_t) 21 << 16) | 0x0000,
-//		((uint32_t) 3  << 16) | 0x10F0,
-//	};
-uint32_t cdcm6208_init_data[] = {//20MHz reference clock
+/* Active board clock profile: 20 MHz reference. Preserve register order. */
+uint32_t cdcm6208_init_data[] = {
 		((uint32_t) 3  << 16) | 0x10B0,
 		((uint32_t) 0  << 16) | 0x01B9,
 		((uint32_t) 1  << 16) | 0x0000,
@@ -91,6 +41,7 @@ int32_t spi_write32(struct spi_device *spi, uint32_t val) {
 	int32_t ret;
 	uint32_t cmd = val;
 
+	/* CDCM6208 command words are transmitted most significant byte first. */
 	buf[0] = cmd >> 24;
 	buf[1] = cmd >> 16;
 	buf[2] = cmd >> 8;
@@ -129,6 +80,7 @@ int32_t cdcm6208_spi_readm(struct spi_device *spi, uint32_t reg,
 	int32_t ret;
 	uint16_t cmd;
 
+	/* Set the read bit and encode the 11-bit register address. */
 	cmd = 0x8000 | (reg & 0x7FF);
 	buf[0] = cmd >> 8;
 	buf[1] = cmd & 0xFF;

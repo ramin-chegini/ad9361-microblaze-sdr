@@ -1,8 +1,13 @@
+/**
+ * @file gps_read.c
+ * @brief Decode the FPGA GPS register snapshot into time and location fields.
+ */
 #include "gps_read.h"
 #include <stdio.h>
 #include <math.h>
 extern uint32_t axi_lite_addr;
 
+/* Reverse the FPGA byte order to reconstruct a MicroBlaze double. */
 double ntohlf(uint64_t p) {
 	DOUBLEType tmpf;
 	tmpf.b.llo1 = p >> 56 & 0xff;
@@ -34,6 +39,7 @@ uint32_t gps_read_info(gps_info *info) {
 
 	info->g_location.time_24h.second = time & 0xff;
 	info->g_location.time_24h.minute = (time >> 8) & 0xff;
+	/* Legacy display offset: UTC+8 without date rollover normalization. */
 	info->g_location.time_24h.hour = ((time >> 16) & 0xff) + 8;
 	info->g_location.time_24h.day = (time >> 24) & 0xff;
 	info->g_location.time_24h.month = (time >> 32) & 0xff;

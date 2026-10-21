@@ -49,6 +49,7 @@
 /******************************************************************************/
 #define GPIO_DEVICE_ID  XPAR_GPIO_0_DEVICE_ID
 #define SPI_DEVICE_ID   XPAR_SPI_0_DEVICE_ID
+/* Bit positions in the board AXI GPIO output channel, not FPGA package pins. */
 #define CDCM_SYNC		9
 #define RF1_TXNRX       8
 #define SYNC_IN         7

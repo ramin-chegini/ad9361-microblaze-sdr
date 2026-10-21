@@ -19,6 +19,10 @@
 
 # Keep the SDK hardware project's system.hdf as the canonical handoff.
 /adaloop_top.hdf
+# SDK extracts these files from the tracked HDF when opening the project.
+/adaloop_top_hw_platform_0/hwdef.xml
+/adaloop_top_hw_platform_0/system.hwh
+/adaloop_top_hw_platform_0/system_bd.tcl
 
 # Hardware images stay local; distribute matching images as release assets.
 *.bit

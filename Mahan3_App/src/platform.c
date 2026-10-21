@@ -55,6 +55,7 @@
 #ifdef _XPARAMETERS_PS_H_
 #include <sleep.h>
 #else
+/* Legacy MicroBlaze busy wait; timing depends on CPU clock and optimization. */
 static inline void usleep(unsigned long usleep)
 {
 	unsigned long delay = 0;
@@ -86,9 +87,9 @@ int32_t spi_init(uint32_t device_id,
 {
 
 	uint32_t base_addr	 = 0;
-	uint32_t control_val = 0;
 	uint32_t spi_options = 0;
 #ifdef _XPARAMETERS_PS_H_
+	uint32_t control_val = 0;
 	uint8_t  byte		 = 0;
 
 	spi_config = XSpiPs_LookupConfig(device_id);
@@ -195,6 +196,7 @@ int32_t spi_read(struct spi_device *spi,
 	Xil_Out32((spi_instance.BaseAddr + 0x60), 0x1e6 | cph);
 	//XSpi_SetSlaveSelect(&spi_instance, (spi->id_no == 0 ? 1 : 2));
 	//Xil_Out32((spi_instance.BaseAddr + 0x70), 0x000);
+	/* Active-low selects: AD9361 id 0 uses mask 6; CDCM6208 id 1 uses 5. */
 	Xil_Out32((spi_instance.BaseAddr + 0x70),spi->id_no == 0 ? 6 : 5);
 	while(cnt < bytes_number)
 	{
