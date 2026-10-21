@@ -1,0 +1,33 @@
+# Local Eclipse / Xilinx SDK workspace state.
+/.metadata/
+/.sdk/
+/RemoteSystemsTempFiles/
+/webtalk/
+*.log
+
+# SDK regenerates application build directories and processor BSP files.
+**/Debug/
+**/Release/
+/Mahan3_App_bsp/microblaze_0/
+*.o
+*.a
+*.d
+*.elf
+*.elf.size
+*.map
+*.su
+
+# Keep the SDK hardware project's system.hdf as the canonical handoff.
+/adaloop_top.hdf
+
+# Hardware images stay local; distribute matching images as release assets.
+*.bit
+*.bin
+*.mcs
+*.ltx
+
+# Local validation outputs and editor temporary files.
+/.validation/
+*.bak
+*.orig
+*~

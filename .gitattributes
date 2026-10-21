@@ -1,0 +1,11 @@
+* text=auto
+*.c text eol=lf
+*.h text eol=lf
+*.ld text eol=lf
+*.md text eol=lf
+*.mss text eol=lf
+*.project text eol=lf
+*.cproject text eol=lf
+*.sdkproject text eol=lf
+*.hdf binary
+*.bit binary
