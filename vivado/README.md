@@ -5,9 +5,10 @@ design targeting **`xcvu9p-flga2104-2-i`**. The original project is named
 `rfmc6000_orihard_modified`; its top module is `adaloop_top`.
 
 Use **Vivado 2018.3**, with the original installation reporting
-**2018.3_AR71948**. This directory accompanies the SDK firmware at the repository
-root. The firmware and this hardware snapshot have known interface differences
-listed below; their coexistence does not establish a matched board release.
+**2018.3_AR71948**. This directory accompanies the SDK firmware in the sibling
+[`sdk/` directory](../sdk/README.md). The firmware and this hardware snapshot have
+known interface differences listed below; their coexistence does not establish
+a matched board release.
 
 ## Layout
 
@@ -191,7 +192,7 @@ hold times for these inputs.
 After resolving integration requirements, run synthesis and implementation and
 review timing and DRC reports. Export a matching hardware handoff for SDK 2018.3
 and regenerate the BSP if hardware changes. The existing tracked
-`adaloop_top_hw_platform_0/system.hdf` is retained unchanged; this cleanup does
+`sdk/adaloop_top_hw_platform_0/system.hdf` is retained unchanged; this cleanup does
 not replace it or assert that it represents the exact supplied RTL snapshot.
 Bitstreams and new hardware exports belong in a separately identified matched
 release, not among generated files committed with these sources.

@@ -1,39 +1,16 @@
-# Local Eclipse / Xilinx SDK workspace state.
-/.metadata/
-/.sdk/
-/RemoteSystemsTempFiles/
-/webtalk/
+# Shared Vivado / SDK generated files and workspace state.
+.Xil/
 *.log
-/.Xil/
 *.jou
 *.str
 
-# SDK regenerates application build directories and processor BSP files.
-**/Debug/
-**/Release/
-/Mahan3_App_bsp/microblaze_0/
-*.o
-*.a
-*.d
-*.elf
-*.elf.size
-*.map
-*.su
-
-# Keep the SDK hardware project's system.hdf as the canonical handoff.
-/adaloop_top.hdf
-# SDK extracts these files from the tracked HDF when opening the project.
-/adaloop_top_hw_platform_0/hwdef.xml
-/adaloop_top_hw_platform_0/system.hwh
-/adaloop_top_hw_platform_0/system_bd.tcl
-
-# Hardware images stay local; distribute matching images as release assets.
+# Hardware images are distributed separately as matched release assets.
 *.bit
 *.bin
 *.mcs
 *.ltx
 
-# Local validation outputs and editor temporary files.
+# Local validation and editor temporary files.
 /.validation/
 *.bak
 *.orig
