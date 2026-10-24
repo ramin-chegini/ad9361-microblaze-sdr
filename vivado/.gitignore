@@ -1,0 +1,15 @@
+# Recreated Vivado projects and output products.
+/build/
+.Xil/
+*.cache/
+*.runs/
+*.sim/
+*.hw/
+*.ip_user_files/
+*.jou
+*.log
+*.str
+*.dcp
+*.wdb
+*.pb
+*.html

@@ -1,6 +1,6 @@
 # AD9361 SDR Bring-Up on MicroBlaze and Virtex UltraScale+
 
-Bare-metal C firmware for bringing up an **AD9361 RF transceiver** from a
+Bare-metal C firmware and Vivado hardware sources for bringing up an **AD9361 RF transceiver** from a
 **MicroBlaze soft-core processor** in a Vivado block design targeting a
 **Xilinx Virtex UltraScale+ XCVU9P FPGA**.
 
@@ -46,16 +46,20 @@ flowchart LR
     MB <--> MDM[MDM debug console]
 ```
 
-This repository contains the SDK firmware and hardware handoff. The complete
-Vivado project, RF sample datapath RTL, custom IP sources, and board constraints
-are not included. The HDF archive contains `hwdef.xml`, `system.hwh`, and
-`system_bd.tcl`, but does not contain a bitstream.
+This repository contains the SDK firmware, its existing hardware handoff, and
+the organized [Vivado hardware sources](vivado/README.md), including RF datapath
+RTL, block design, IP configuration, board constraints, and a Tcl project
+recreation script. The supplied RTL and SDK have known register-interface
+differences documented in the Vivado README and are not a verified matched
+hardware/software release. The HDF archive contains `hwdef.xml`, `system.hwh`,
+and `system_bd.tcl`, but does not contain a bitstream.
 
 ## Repository layout
 
 ```text
 .
 |-- README.md
+|-- vivado/                     Hardware sources and project recreation guide
 |-- Mahan3_App/
 |   |-- .project / .cproject       SDK application project definitions
 |   `-- src/
@@ -92,6 +96,10 @@ copies remain on disk. The root `adaloop_top.hdf` is an identical local duplicat
 of the tracked hardware project's `system.hdf` and is also ignored.
 
 ## Build in Xilinx SDK 2018.3
+
+For Vivado project recreation, architecture, constraints, and hardware validation
+status, see [vivado/README.md](vivado/README.md). The steps below build the firmware
+against the existing SDK handoff.
 
 1. Clone the repository and open Xilinx SDK 2018.3 with a fresh workspace outside
    the repository.

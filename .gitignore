@@ -4,6 +4,9 @@
 /RemoteSystemsTempFiles/
 /webtalk/
 *.log
+/.Xil/
+*.jou
+*.str
 
 # SDK regenerates application build directories and processor BSP files.
 **/Debug/
