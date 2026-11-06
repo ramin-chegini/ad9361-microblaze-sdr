@@ -1,9 +1,3 @@
-/** @file gps_read.h
- *  @brief Decode GPS telemetry supplied by the FPGA AXI-Lite register bank.
- */
-#ifndef SRC_GPS_READ_H_
-#define SRC_GPS_READ_H_
-
 #include <stdint.h>
 #include "io_control.h"
 typedef struct {
@@ -62,7 +56,4 @@ union long64_t {
 		uint8_t hhi2;
 	} b;
 };
-/* Fill telemetry fields and return the GNSS decoding status (zero at lock). */
 uint32_t gps_read_info(gps_info *info);
-
-#endif /* SRC_GPS_READ_H_ */

@@ -1,14 +1,15 @@
-/**
- * @file xadc.c
- * @brief Configure the FPGA temperature channel and report degrees Celsius.
+/*
+ * xadc.c
  *
- * Original temperature monitor author: lichen.
+ *  Created on: 2020Äê1ÔÂ22ÈÕ
+ *      Author: lichen
  */
 #include "xadc.h"
 
 #include <stdio.h>
 static XSysMon SysMonInst;
 int xadc_initial(u16 XAdcDeviceId) {
+	int Status;
 	XSysMon_Config *ConfigPtr;
 	ConfigPtr = XSysMon_LookupConfig(XAdcDeviceId);
 	if (ConfigPtr == NULL) {

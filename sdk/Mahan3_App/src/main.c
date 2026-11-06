@@ -1,6 +1,6 @@
 /***************************************************************************//**
  *   @file   main.c
- *   @brief  MicroBlaze bare-metal startup and AD9361 board command loop.
+ *   @brief  Implementation of Main Function.
  *   @author DBogdan (dragos.bogdan@analog.com)
  ********************************************************************************
  * Copyright 2013(c) Analog Devices, Inc.
@@ -53,7 +53,7 @@
 #include "gpio_initial.h"
 #include "radio_set.h"
 #include "ad9361_config.h"
-#include "INTR_IRQHandler.h"
+#include "platform.h"
 #include "gps_read.h"
 #include "xadc.h"
 
@@ -63,15 +63,14 @@
 
 uint32_t axi_lite_addr = XPAR_UP_AXI_0_BASEADDR;
 uint32_t axi_lite_intr_id = XPAR_AXI_INTC_0_SYSTEM_INTERRUPT_INTR;
-/* The ISR captures one command; the foreground loop executes it. */
-intr_cmd intr_cmd_param;
+// Ramin: previous code: intr_cmd intr_cmd_param;
+volatile intr_cmd intr_cmd_param;
 uint32_t fpga_ver = 0xa4;
 uint32_t sw_ver = 0xa2;
 uint32_t config_done = 0;
-/* RF frequencies and bandwidth are in Hz; TX attenuation is in millidecibels. */
 uint32_t sample_rate = 61.44e6;
 uint64_t tx_lo_freq = 100e6;
-uint64_t rx_lo_freq = 80e6;
+uint64_t rx_lo_freq = 80e6;//80e6;
 uint32_t bandwidth = 56e6;
 int32_t gain = 1;
 uint32_t txatt = 0e3;
@@ -80,24 +79,28 @@ uint32_t phase = 128;
 uint32_t reconfig = 0;
 uint32_t regr = REG_PRODUCT_ID;
 int32_t tempa;
-fsm_status fsm = IDEL;
+// Ramin: previous code: fsm_status fsm = IDEL;
+volatile fsm_status fsm = IDEL;
+extern int intr_irq_proc();
+extern uint8_t dev_id;
 struct ad9361_rf_phy *ad9361_phy;
 struct spi_device cdcm6208_spi = { .id_no = 1 };
 
 /***************************************************************************//**
- * @brief Initialize GPIO, clocking, RF, and the FPGA command interface.
+ * @brief main
  *******************************************************************************/
 
 int main(void) {
 	print("**************************************************\n\r");
 	print("**********     RFMC6000 NO-OS Test     ***********\n\r");
 	print("**************************************************\n\r");
-	/* Bring up board outputs and the CDCM6208 using SPI phase 0. */
+
+	// NOTE: The user has to choose the GPIO numbers according to desired
+	// carrier board.
 	gpio_initial();
 	spi_init(SPI_DEVICE_ID, 0, 0);
 	cdcm6208_init(&cdcm6208_spi);
 	cdcm6208_y5_internal(&cdcm6208_spi);
-	/* Wait for the existing board lock condition; this loop has no timeout. */
 	uint32_t lock_rf1 = -1;
 	while (lock_rf1 != 0) {
 		lock_rf1 = cdcm6208_spi_read(&cdcm6208_spi, 21) & 0xF;
@@ -106,7 +109,6 @@ int main(void) {
 
 	printf("read from CDCM6208_RF1 reg21=0x%lx\n", lock_rf1);
 
-	/* Pulse clock synchronization before releasing the AD9361 reset. */
 	mdelay(10);
 	gpio_set_value(CDCM_SYNC, 1);
 	mdelay(10);
@@ -115,17 +117,21 @@ int main(void) {
 	gpio_set_value(CDCM_SYNC, 1);
 	mdelay(500);
 
-	/* The AD9361 shares the SPI bus and uses phase 1. */
+	//configure RF1
+
 	default_init_param.gpio_resetb = RF1_RESETB;
 	default_init_param.gpio_sync = -1;
 	default_init_param.gpio_cal_sw1 = -1;
 	default_init_param.gpio_cal_sw2 = -1;
 	spi_init(SPI_DEVICE_ID, 1, 0);
-	/* Select control-output bank 0x01 and enable pins 7 and 6. */
-	default_init_param.ctrl_outs_index = 0x01;
-	default_init_param.ctrl_outs_enable_mask = 0xc0;
 
-	/* Initialize the driver, then apply board delays and runtime RF defaults. */
+	//__________________________________________
+	//Set the index to 0 to read the PLL status
+	default_init_param.ctrl_outs_index = 0x01;
+	//Enable CTRL_OUT pin number 7 and 6 (0xc0)
+	default_init_param.ctrl_outs_enable_mask = 0xc0;
+	//__________________________________________
+
 	ad9361_init(&ad9361_phy, &default_init_param);
 	ad9361_spi_write(ad9361_phy->spi, REG_TX_CLOCK_DATA_DELAY, 0x40);
 	int32_t val;
@@ -134,7 +140,8 @@ int main(void) {
 	ad9361_set_auxdac1(ad9361_phy, auxdac1);
 	printf("ad9361_phy,auxdac1=%ld\n", auxdac1);
 
-	/* Read FPGA identification from the custom AXI-Lite peripheral. */
+	//set yunsdr axi lite
+
 	uint32_t val_out = AXI_REG_READ(axi_lite_addr, 0);
 	printf("register addr=0x0 read out = %ld\n\r", val_out & 0xFFFF);
 	val_out = AXI_REG_READ(axi_lite_addr, 100 * 4);
@@ -143,20 +150,23 @@ int main(void) {
 	printf("The lasted build at 20220525_PM1\n");
 	printf("The lasted build at %s %s\n", __TIME__, __DATE__);
 
-	/* Connect the FPGA command interrupt to the MicroBlaze exception handler. */
+	// interrupt setup
+
 	interrupt_setup();
+
+	//set axi lite
 
 	AXI_REG_WRITE(axi_lite_addr, 2 * 4, 0);				//pps_disable
 	AXI_REG_WRITE(axi_lite_addr, 3 * 4, phase);	//phase
 	AXI_REG_WRITE(axi_lite_addr, 4 * 4, 1);	//rfmode
 
-	/* Disable VTC, pulse the board input-delay load, then re-enable VTC. */
 	AXI_REG_WRITE(axi_lite_addr, 20 * 4, 0x00);			//idly_en_vtc
 	AXI_REG_WRITE(axi_lite_addr, 22 * 4, 120);			//idly_d
 	AXI_REG_WRITE(axi_lite_addr, 21 * 4, 0x20);			//idly_load
 	AXI_REG_WRITE(axi_lite_addr, 21 * 4, 0x00);			//idly_load
 	AXI_REG_WRITE(axi_lite_addr, 20 * 4, 0x7F);			//idly_en_vtc
-	/* Enable the FPGA temperature monitor and collect board diagnostics. */
+
+	//initial interrupt controller
 	val = xadc_initial(XPAR_SYSMON_0_DEVICE_ID);
 	if (val == 0) {
 		printf("Xadc Setup PASSED\r\n");
@@ -193,17 +203,57 @@ int main(void) {
 				info.g_location.altitude_f);
 	}
 
-	/* Hardware commands are handled here rather than inside the ISR. */
+
+
+//	ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 960000, 0, 1);		//960000
+//	uint32_t mode, ch, en, pd;
+//	uint32_t rx_path[6],tx_path[6];
+
 	while (1) {
-		/* Retain the board's continuous input-delay reload sequence. */
+//		ad9361_bist_tone(ad9361_phy, BIST_DISABLE, 3840000, 0, 0);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_RX, 3840000, 0, 0);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_RX, 3840000, 0, 1);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_RX, 3840000, 0, 2);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_RX, 3840000, 0, 3);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 1, 0, 1);		//960000
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 1, 0, 2);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 1, 0, 3);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 1, 0, 4);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 2, 0, 4);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 3, 0, 4);
+//		ad9361_bist_tone(ad9361_phy, BIST_INJ_TX, 4, 0, 4);
+
+
+//		ad9361_en_dis_tx(ad9361_phy,1,1);
+//		ad9361_en_dis_tx(ad9361_phy,2,1);
+////		ad9361_set_tx_rf_port_output(ad9361_phy,mode);
+//		ad9361_get_tx_rf_port_output(ad9361_phy,&mode);
+
+//		ad9361_get_tx_sampling_freq(ad9361_phy, &sample_rate);
+//		ad9361_get_tx_lo_freq(ad9361_phy, &tx_lo_freq);
+//		ad9361_get_rx_lo_freq(ad9361_phy, &rx_lo_freq);
+//		printf("sample_freq=%ldHz\n", sample_rate);
+//		printf("tx_lo_freq=%ldHz\n", tx_lo_freq);
+//		printf("rx_lo_freq=%ldHz\n", rx_lo_freq);
+//		ad9361_get_trx_clock_chain(ad9361_phy,&rx_path[0],&tx_path[0]);
+
+//		ad9361_get_tx_lo_powerdown(ad9361_phy,&pd);
+//		printf("pd status=%ld\n", pd);
+
 		AXI_REG_WRITE(axi_lite_addr, 20 * 4, 0x00);			//idly_en_vtc
 		AXI_REG_WRITE(axi_lite_addr, 22 * 4, 0x7F);			//idly_d
 		AXI_REG_WRITE(axi_lite_addr, 21 * 4, 0x20);			//idly_load
 		AXI_REG_WRITE(axi_lite_addr, 21 * 4, 0x00);			//idly_load
 		AXI_REG_WRITE(axi_lite_addr, 20 * 4, 0x7F);			//idly_en_vtc
+//		if (reconfig) {
+//			//reconfig = 0;
+//			val = ad9361_config(ad9361_phy);
+//			AXI_REG_WRITE(axi_lite_addr, 3 * 4, phase);	//phase
+//		}
 
 		if (fsm == CMD_IRQ) {
-			intr_irq_proc(intr_cmd_param, &fsm);
+		    intr_irq_proc(intr_cmd_param, &fsm);
 		}
+
 	}
 }

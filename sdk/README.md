@@ -26,7 +26,7 @@ hardware handoff. The MicroBlaze processor itself is instantiated in the sibling
 | Program memory | 512 KiB local BRAM; linker reserves the vector region below `0x50` |
 | Stack / heap | `0x2800` bytes each in `lscript.ld` |
 | RF transceiver | AD9361, two RX and two TX channels, FDD startup configuration |
-| AD9361 reference | 20 MHz in `radio_set.c` |
+| AD9361 reference | 20 MHz in `radio_set.h` |
 | Clock generator | CDCM6208, board-specific 20 MHz reference register profile |
 | Console | BSP stdin/stdout use `mdm_1` through the MicroBlaze debug connection |
 | Control peripheral | `up_axi_0`, base address `0x44A40000` in the supplied BSP |
@@ -54,10 +54,10 @@ flowchart LR
 This directory contains the SDK firmware and its existing hardware handoff.
 The sibling [Vivado hardware sources](../vivado/README.md) include RF datapath
 RTL, block design, IP configuration, board constraints, and a Tcl project
-recreation script. The supplied RTL and SDK have known register-interface
-differences documented in the Vivado README and are not a verified matched
-hardware/software release. The HDF archive contains `hwdef.xml`, `system.hwh`,
-and `system_bd.tcl`, but does not contain a bitstream.
+recreation script. The command/result mailbox in the RTL and firmware now
+shares the CAL2 interface described below. The original HDF is retained; it
+contains `hwdef.xml`, `system.hwh` and `system_bd.tcl`, without a bitstream.
+A newly implemented/exported 2018.3 board release is outside this source update.
 
 ## SDK directory layout
 
@@ -68,12 +68,13 @@ sdk/
 |   |-- .project / .cproject       SDK application project definitions
 |   `-- src/
 |       |-- main.c                Board startup and foreground command loop
-|       |-- gpio_initial.c/.h     Board GPIO startup levels
-|       |-- radio_set.c/.h        AD9361 initialization data and FIR profiles
+|       |-- gpio_initial.h        Board GPIO startup levels
+|       |-- radio_set.h           AD9361 initialization data and FIR profiles
 |       |-- ad9361_config.c/.h    Runtime RF settings and FIR selection
 |       |-- interrupt_setup.c     AXI INTC setup and command capture ISR
 |       |-- INTR_IRQHandler.h     Interrupt and command-dispatch declarations
 |       |-- intr_irq.c            Host/FPGA command dispatcher
+|       |-- calibrator_verify.h   TX LO programming, SPI readback and lock checks
 |       |-- spi_ctrl.c/.h         CDCM6208 and AUXDAC1 helpers
 |       |-- platform.c/.h         Xilinx SPI/GPIO/delay adaptation
 |       |-- parameters.h          BSP device IDs and board GPIO bit positions
@@ -91,8 +92,11 @@ sdk/
 ```
 
 SDK project names are retained so that application, BSP, and hardware references
-remain valid. GPIO functions and radio configuration data are defined in `.c`
-files, with declarations in the corresponding headers.
+remain valid. The final workspace defines GPIO startup and radio configuration
+in `gpio_initial.h` and `radio_set.h`. The earlier repository-only
+`gpio_initial.c` and `radio_set.c` copies are removed to avoid duplicate
+definitions. The legacy global declarations require `-fcommon` when using a
+compiler whose default is `-fno-common`; the supplied build helper sets it.
 
 Generated processor BSP files, `Debug/` and `Release/` outputs, Eclipse workspace
 state, logs, and hardware images are excluded by `.gitignore`. Existing local
@@ -117,7 +121,8 @@ firmware against the existing SDK handoff.
    and `lib` directories are intentionally absent from Git.
 4. Build the BSP, then select the application's **Debug** or **Release** build
    configuration and build `Mahan3_App`. SDK regenerates the managed makefiles
-   and includes all `.c` sources, including `gpio_initial.c` and `radio_set.c`.
+   and includes the 11 application `.c` sources. Keep the final header-based
+   definitions; do not restore the removed duplicate `.c` files.
 5. From the repository root, the resulting image is
    `sdk/Mahan3_App/Debug/Mahan3_App.elf` or
    `sdk/Mahan3_App/Release/Mahan3_App.elf`.
@@ -129,7 +134,19 @@ paths are unchanged.
 
 The build uses the MicroBlaze compiler (`mb-gcc`), the regenerated BSP's
 `libxil`, and the supplied linker script. Modern Vitis platform migration is
-outside the current SDK project setup. No simulation step is needed.
+outside the current SDK project setup.
+
+For a command-line build after BSP generation, run from the repository root:
+
+```text
+python sdk/Mahan3_App/build_verified_firmware.py
+```
+
+It prefers SDK 2018.3 `mb-gcc`; set `MB_GCC` or use `--compiler` for another
+installation. The output ELF, build log and SHA-256 source/build manifest are
+written under `.validation/firmware_build`. `--publish` copies that ELF into the
+ignored application `Release` directory and backs up an existing ELF under
+`.validation`. It does not change the tracked C sources or hardware handoff.
 
 ## Program and run
 
@@ -172,7 +189,7 @@ the handoff has not been established. Use a matched hardware export and image.
 | AUXDAC1 target | 1482 mV |
 
 Edit these runtime defaults in `main.c`. The initial driver configuration in
-`radio_set.c` has its own LO, bandwidth, and clock-chain values; `ad9361_config()`
+`radio_set.h` has its own LO, bandwidth, and clock-chain values; `ad9361_config()`
 applies the runtime defaults after `ad9361_init()`.
 
 `ad9361_set_sample()` selects paired RX/TX FIR profiles: factor 2 with 64 taps
@@ -182,79 +199,78 @@ existing selection rules, not input validation or measured RF performance.
 
 ## AXI-Lite command interface
 
-Register numbers below are **32-bit word indices**. The C access helpers take
-byte offsets, so the firmware multiplies each index by four.
+These are **internal 32-bit word indices** relative to `0x44A40000`, not Mahan
+host command-register addresses. Byte offset = word index * 4.
 
-| Word index | Firmware use |
+| Word | Read | Write |
+| --- | --- | --- |
+| 52 | IRQ clear control | IRQ acknowledgement; does not complete the command |
+| 54 | Latched command header | Unimplemented |
+| 55 / 56 | Latched request payload, low / high | Unimplemented |
+| 57 | `[2]` sticky overflow, `[1]` busy, `[0]` done pulse | Bit 0 commits staged result only while busy with a matching token |
+| 58 / 59 | Completed result, low / high | Stage result, low / high |
+| 60 | Current command sequence | Stage completion sequence token |
+| 61 | Completed error code | Stage error code |
+| 62 | Completed sequence | Unimplemented |
+| 63 | `0x43414C32` (`CAL2`) | Unimplemented |
+
+The ISR captures the latched request and its sequence, then acknowledges the
+interrupt without the previous 1 ms delay. Shared command/FSM state is volatile.
+The foreground dispatcher executes the command, stages the result, token and
+error, and commits word 57. A stale token cannot release the busy mailbox.
+Only one command may be outstanding: the caller must wait for `cmd_ready` and
+provide the request with the required clock-domain synchronization. A trigger
+while busy is rejected and sets sticky overflow until reset.
+
+### TX LO verification
+
+Write command 2 uses `calibrator_verify.h` to clear only the software TX LO
+rate cache before calling the setter. Retrying the same frequency therefore
+performs real programming. It reads five PLL integer/fraction bytes and the
+RFPLL divider, calculates the resulting frequency using the TX reference,
+checks a 100 Hz tolerance, then requires four consecutive VCO-lock reads.
+The lock loop permits up to 2000 polls with 10 us delays, plus SPI execution
+time. Error propagation from the TX PLL driver is retained.
+
+| Error | Meaning |
 | --- | --- |
-| 52 | IRQ acknowledgement pulse in the ISR; also used by legacy command 65 |
-| 54 | Command header: RF identifier `[15:12]`, write/read field `[11:8]`, command `[7:0]` |
-| 55 / 56 | Request payload, low / high 32-bit words |
-| 57 | Command-complete pulse |
-| 58 / 59 | Response payload, low / high 32-bit words |
-| 100 | FPGA firmware version |
-| 101-110 | GPS time, latitude, longitude, altitude, and status word pairs |
+| 0 | Verified success |
+| 6 | TX LO setter failed |
+| 7 | Frequency readback outside tolerance |
+| 8 | Stable lock not obtained |
+| 10 | SPI/readback failure or invalid reference |
+| 11 | Unsupported external LO or active fastlock profile |
 
-The ISR snapshots the command, sets `fsm` to `CMD_IRQ`, and pulses the board IRQ
-acknowledgement. The foreground dispatcher executes the operation, returns the
-state to `IDEL` (the original identifier), writes the 64-bit response, and pulses
-command-complete. The interface has one command slot; it does not implement a
-software command queue.
+Controller timeout code 9 belongs to the Mahan parent FPGA controller, which
+is not included here. No retry limit or RF-level threshold is configured by
+this firmware snapshot.
 
-`intr_irq.c` is the command reference. It covers register access, LO frequencies,
-sample rate, bandwidth, RX gain, TX attenuation, PPS/time control, FIFO counters,
-GPS telemetry, and firmware identification. Command numbers and register values
-are retained from the existing firmware and must match the external FPGA/host
-implementation.
+## Remaining legacy behavior
 
-## Existing behavior and validation scope
+- Firmware/GPS word indices 100-110 are still read by legacy code but are not
+  implemented in this local RTL; reads return `0xAABBCCDD`.
+- Legacy commands 64/66 use words 61/60 with older meanings. Those addresses now
+  belong to the verified mailbox. They are not supported board controls in
+  this CAL2 interface and must be reviewed before use.
+- Clock startup lock polling has no timeout. Some unrelated RF commands retain
+  unchecked API returns. Command 31 and 81 switch fall-through and the GPS
+  display's UTC+8 conversion are retained from the final local source.
+- Initialization values, FIR coefficients and unrelated command behavior are
+  copied from the final local SDK, including its header-based definitions.
 
-- Clock lock polling has no timeout. Several initialization and RF API return
-  values are not checked, so a successful build does not establish board health.
-- MicroBlaze delays use a legacy busy loop whose timing depends on CPU clock and
-  compiler optimization. The ISR retains its 1 ms delay and diagnostic print.
-- ISR/foreground shared state retains the original synchronization approach.
-  Confirm command timing and interrupt behavior on hardware before relying on
-  sustained command traffic.
-- Commands 31 and 81 retain existing switch fall-through into commands 32 and
-  100, respectively; later cases overwrite the response. Index 52 has overlapping
-  legacy uses. These behaviors require the matching FPGA/host specification
-  before changing the protocol.
-- GPS display conversion retains a fixed UTC+8 offset without date rollover.
-  Some clock messages still say 10 MHz and version strings contain legacy board
-  identifiers/dates; the configured reference is 20 MHz.
+## Validation
 
-This cleanup preserves board programming values, FIR coefficients, and command
-behavior. Simulation and new on-board RF validation are not part of the cleanup.
+The final 11 C translation units compile and link with SDK 2018.3 `mb-gcc` 7.3.1,
+`-O1 -fcommon`, the existing generated BSP and the supplied linker script.
+The portable build helper records the compiler and hashes in its build manifest.
+A clean-workspace BSP regeneration was not part of this check.
 
-The earlier firmware cleanup's build checks used the installed SDK 2018.3
-`mb-gcc` 7.3.1 cross-compiler, the existing local generated BSP headers/library,
-and the tracked linker script.
-All 13 application `.c` files were compiled directly and linked into fresh ELFs
-under the original SDK workspace's ignored `.validation/` directory. This verifies
-compilation and linking against the local BSP; importing a clean workspace and
-regenerating its BSP were not exercised.
-
-| Configuration | Optimization | Compile / link | `text` / `data` / `bss` bytes |
-| --- | --- | --- | --- |
-| Debug | `-O0` | Passed | 187048 / 4688 / 21520 |
-| Release (SDK project setting) | `-O1` | Passed | 148884 / 4688 / 21524 |
-| Additional optimization check | `-O2` | Passed | 146732 / 4688 / 21524 |
-
-The directory split into `sdk/` moves project files without changing their
-contents. The compile/link results above describe the earlier firmware cleanup;
-the layout-only change was checked for unchanged file contents and preserved
-SDK project references, without rerunning compilation or BSP generation.
-
-Both configurations report two existing warnings in the unchanged `ad9361.c`
-driver: unused `tx` and unused `ad9361_int_loopback_fix_ch_cross`. Release also
-reports that `vco_div` may be used uninitialized. The build is not warning-free;
-the driver warning remains an item for a separate functional review.
-
-A comparison against the initial source commit also confirmed the unchanged
-startup/command function bodies, GPIO register sequence, AD9361 initializer,
-and FIR coefficients after relocating the definitions. Core AD9361 driver
-sources and the hardware handoff are unchanged.
+The build retains warnings for unused driver/local variables, possibly
+uninitialized legacy `vco_div`, and the legacy implicit `interrupt_setup`
+declaration. Passing compilation does not mean the source is warning-free.
+The paired hardware mailbox simulation passes under native Vivado 2018.3.
+Full implementation, timing closure and a matched new hardware export are
+separate release steps. See the [hardware guide](../vivado/README.md).
 
 ## Source attribution
 

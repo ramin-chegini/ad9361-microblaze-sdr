@@ -57,6 +57,12 @@ module adaloop_top(
 //  input          aclken,
   input          CfgSET_Trig,
   output[1:0]    Interrupt_Ack,
+  // //////////////// Ramin: BEGIN mailbox result ports //////////////////
+  output cmd_ready, cmd_busy, cmd_done, cmd_overflow,
+  output [31:0] cmd_sequence, reply_sequence, reply_command,
+  output [63:0] reply_data,
+  output [31:0] reply_error,
+  // //////////////// Ramin: END mailbox result ports //////////////////
   input [7:0]    PW, //Pulse Width
   input [7:0]    PRI,// Pulse Period
   input  [31:0]  sdr_cmd_param,
@@ -257,7 +263,12 @@ module adaloop_top(
 
     .sdr_info         (sdr_info     ),//register in
     .adc_status       (adc_status   ),
-    .rf1_ctrl_out     (ctrl_out     )
+    // Ramin: previous final connection: .rf1_ctrl_out(ctrl_out)
+    .rf1_ctrl_out(ctrl_out),
+    .cmd_ready(cmd_ready), .cmd_busy(cmd_busy), .cmd_done(cmd_done),
+    .cmd_overflow(cmd_overflow), .cmd_sequence(cmd_sequence),
+    .reply_sequence(reply_sequence), .reply_command(reply_command),
+    .reply_data(reply_data), .reply_error(reply_error)
         
   );
   
@@ -487,6 +498,13 @@ module adaloop_top(
 //  .probe_out0(counter_vio)  // output wire [5 : 0] probe_out0
 //);
 
+  // //////////////// Ramin: BEGIN synchronize actual DAC enable //////////////////
+  (* ASYNC_REG="TRUE", SHREG_EXTRACT="NO" *) reg [1:0] calib_enable_dac;
+  always @(posedge data_clk1 or negedge fclk_reset0_n) begin
+    if (!fclk_reset0_n) calib_enable_dac<=0;
+    else calib_enable_dac<={calib_enable_dac[0],Calib_En};
+  end
+  // //////////////// Ramin: END synchronize actual DAC enable //////////////////
   //---------------  Pulse Generator ----------------------------
 
     
@@ -502,7 +520,8 @@ module adaloop_top(
         end 
         else 
          begin
-            if(Calib_En == 1'b1)
+            // Ramin: previous code: if(Calib_En == 1'b1)
+            if(calib_enable_dac[1] == 1'b1)
             begin
                 if (counter < PRI - 1)
 //                if (counter < PERIOD_CYCLES - 1)

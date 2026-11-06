@@ -147,6 +147,7 @@ typedef struct intr_cmd {
 	uint8_t wr_rdn;
 	uint8_t cmd_num;
 	uint64_t cmd_infowr;
+	uint32_t command_id; /* Ramin: internal mailbox sequence, not a network field. */
 } intr_cmd;
 
 typedef enum fsm_status {

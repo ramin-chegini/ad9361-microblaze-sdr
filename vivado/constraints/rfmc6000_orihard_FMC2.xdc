@@ -165,3 +165,10 @@ set_property C_CLK_INPUT_FREQ_HZ 300000000 [get_debug_cores dbg_hub]
 set_property C_ENABLE_CLK_DIVIDER false [get_debug_cores dbg_hub]
 set_property C_USER_SCAN_CHAIN 1 [get_debug_cores dbg_hub]
 connect_debug_port dbg_hub/clk [get_nets data_clk1]
+
+# //////////////// Ramin: BEGIN actual DAC-enable first-stage CDC //////////////////
+# Calib_En is asynchronous to data_clk1. Exempt only the first synchronizer D.
+# The second stage and all DAC consumers remain timed.
+set ad9361_enable_meta [get_cells -quiet -hier -regexp {(^|.*/)calib_enable_dac_reg\[0\]$}]
+set_false_path -quiet -to [get_pins -quiet -of_objects $ad9361_enable_meta -filter {REF_PIN_NAME == D}]
+# //////////////// Ramin: END actual DAC-enable first-stage CDC //////////////////

@@ -6730,8 +6730,12 @@ int32_t ad9361_rfpll_set_rate(struct refclk_scale *clk_priv, uint32_t rate)
 			else
 				ad9361_rfpll_dummy_set_rate(phy->ref_clk_scale[TX_RFPLL_DUMMY], rate);
 		} else {
-			ad9361_rfpll_int_set_rate(phy->ref_clk_scale[TX_RFPLL_INT], rate,
-					phy->clks[phy->ref_clk_scale[TX_RFPLL_INT]->parent_source]->rate);
+            /* Ramin: previous call ignored the TX PLL setter's error:
+             * ad9361_rfpll_int_set_rate(phy->ref_clk_scale[TX_RFPLL_INT], rate,
+             *     phy->clks[phy->ref_clk_scale[TX_RFPLL_INT]->parent_source]->rate); */
+            ret=ad9361_rfpll_int_set_rate(phy->ref_clk_scale[TX_RFPLL_INT], rate,
+                    phy->clks[phy->ref_clk_scale[TX_RFPLL_INT]->parent_source]->rate);
+            if (ret<0) return ret;
 		}
 		/* For RX LO we typically have the tracking option enabled
 		* so for now do nothing here.

@@ -124,6 +124,7 @@ int32_t clk_set_rate(struct ad9361_rf_phy *phy,
 {
 	uint32_t source;
 	int32_t i;
+	int32_t tx_set_status; /* Ramin: report a TX synthesizer failure to the caller. */
 	uint32_t round_rate;
 
 	source = clk_priv->source;
@@ -155,7 +156,9 @@ int32_t clk_set_rate(struct ad9361_rf_phy *phy,
 			case TX_RFPLL:
 			case RX_RFPLL:
 				round_rate = ad9361_rfpll_round_rate(clk_priv, rate);
-				ad9361_rfpll_set_rate(clk_priv, round_rate);
+                /* Ramin: previous code: ad9361_rfpll_set_rate(clk_priv, round_rate); */
+                tx_set_status=ad9361_rfpll_set_rate(clk_priv, round_rate);
+                if (source==TX_RFPLL && tx_set_status<0) return tx_set_status;
 				phy->clks[source]->rate = ad9361_rfpll_recalc_rate(clk_priv);
 				break;
 			case BBPLL_CLK:

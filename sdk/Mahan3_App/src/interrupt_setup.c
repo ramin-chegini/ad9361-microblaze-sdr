@@ -1,7 +1,4 @@
-/**
- * @file interrupt_setup.c
- * @brief Route the FPGA command IRQ through AXI INTC to MicroBlaze.
- */
+/***************************** Include Files *********************************/
 
 #include "xparameters.h"
 #include "xstatus.h"
@@ -17,10 +14,16 @@
 
 static XIntc InterruptController; /* Instance of the Interrupt Controller */
 
+/*
+ * Create a shared variable to be used by the main thread of processing and
+ * the interrupt processing
+ */
+volatile static int InterruptProcessed = FALSE;
+
 /*****************************************************************************/
 /**
  *
- * Connect the custom AXI-Lite IRQ and enable real hardware interrupts.
+ * This is the main function for the Interrupt Controller example.
  *
  * @param	None.
  *
@@ -63,7 +66,9 @@ int interrupt_setup(void) {
 
 	/*
 	 * Start the interrupt controller such that interrupts are enabled for
-	 * the connected device. XIN_REAL_MODE uses the physical interrupt input.
+	 * all devices that cause interrupts, specify simulation mode so that
+	 * an interrupt can be caused by software rather than a real hardware
+	 * interrupt.
 	 */
 	Status = XIntc_Start(&InterruptController, XIN_REAL_MODE);
 	if (Status != XST_SUCCESS) {
@@ -71,7 +76,8 @@ int interrupt_setup(void) {
 	}
 
 	/*
-	 * Unmask the custom AXI-Lite command interrupt input.
+	 * Enable the interrupt for the device and then cause (simulate) an
+	 * interrupt so the handlers will be called.
 	 */
 	XIntc_Enable(&InterruptController, axi_lite_intr_id);
 
@@ -97,9 +103,9 @@ int interrupt_setup(void) {
 
 }
 
-/* Capture the mailbox and acknowledge the FPGA; RF operations run in main(). */
-void INTR_IRQHandler(void) {
-	uint32_t val_out;
+void INTR_IRQHandler() {
+	/* Ramin: mailbox stays busy until intr_irq_proc publishes completion. */
+	intr_cmd_param.command_id = AXI_REG_READ(axi_lite_addr, 60 * 4);
 	val_out = AXI_REG_READ(axi_lite_addr, 54 * 4);
 	intr_cmd_param.ad9361_id = val_out >> 12 & 0xF;
 	intr_cmd_param.wr_rdn = val_out >> 8 & 0xF;
@@ -108,12 +114,13 @@ void INTR_IRQHandler(void) {
 	intr_cmd_param.cmd_infowr = (uint64_t) AXI_REG_READ(axi_lite_addr, 56 * 4) << 32 | val_out;
 	fsm = CMD_IRQ;
 
-	/* Preserve the board IRQ acknowledge pulse and its existing delay. */
+	// interrupt clear routine must be written here ...
 
 	AXI_REG_WRITE(axi_lite_addr, 52 * 4, 1); // irq_ctrl in hdl
-	mdelay(1);
+	// Ramin: previous code: mdelay(1);
+	(void)AXI_REG_READ(axi_lite_addr, 52 * 4); /* Complete the clear write. */
 	AXI_REG_WRITE(axi_lite_addr, 52 * 4, 0); // irq_ctrl in hdl
 
-	printf(" Interrupt ");
+	// Ramin: previous code: printf(" Interrupt "); -- keep the ISR short.
 
 }
